@@ -61,7 +61,7 @@ dat <- data.frame(
   feed  = factor(rep(rep(c("low","high"), each=6), 4)),
   breed = factor(rep(c("NRF","Hereford","Angus"), 16)),
   bull  = factor(rep(LETTERS[1:4], each = 12)),
-  daughter = factor(rep(letters[1:4], 12)),
+  daughter = factor(c(rep(letters[1:4], 3), rep(letters[5:8], 3), rep(letters[9:12], 3), rep(letters[13:16], 3))),
   age   = round(rnorm(48, mean = 36, sd = 5))
 )
 dat$yield <- 150*with(dat, 10 + 3 * as.numeric(feed) + as.numeric(breed) + 
@@ -198,7 +198,7 @@ Using the mixlm package, we specify the random effects using the `r()` function.
 If we assume that the bull is a random selection from the population of bulls,
 we can specify this as a random effect when focusing on feed. The model looks
 like a fixed effect model, but the error structure is different:
-$$yield_{abn} = \mu + feed_a + breed_b + (feed:breed)_{ab} + \epsilon_{abn}$$
+$$yield_{abn} = \mu + feed_a + bull_b + (feed:bull)_{ab} + \epsilon_{abn}$$
 
 ```{r}
 mod <- lm(yield ~ feed*r(bull), data = dat)
@@ -231,6 +231,7 @@ necessarily need to be random.
 set.seed(123)
 long <- dat[c(1:4,9:12), c("feed", "daughter", "yield")]
 long <- rbind(long, long, long)
+long$daughter <- factor(long$daughter) # Remove redundant daughter
 long$time  <- factor(rep(1:3, each=8))
 long$yield <- long$yield + rnorm(24, sd = 100) + rep(c(-200,0,200), each=8)
 plot(yield~daughter, data=long)

@@ -156,7 +156,7 @@ dat <- data.frame(
   feed  = factor(rep(rep(c("low","high"), each=6), 4)),
   breed = factor(rep(c("NRF","Hereford","Angus"), 16)),
   bull  = factor(rep(LETTERS[1:4], each = 12)),
-  daughter = factor(rep(letters[1:4], 12)),
+  daughter = factor(c(rep(letters[1:4], 3), rep(letters[5:8], 3), rep(letters[9:12], 3), rep(letters[13:16], 3))),
   age   = round(rnorm(48, mean = 36, sd = 5))
 )
 dat$yield <- 150*with(dat, 10 + 3 * as.numeric(feed) + as.numeric(breed) + 
@@ -165,6 +165,7 @@ dat$yield <- 150*with(dat, 10 + 3 * as.numeric(feed) + as.numeric(breed) +
 # Extended to repeated measures
 long <- dat[c(1:4,9:12), c("feed", "daughter", "yield")]
 long <- rbind(long, long, long)
+long$daughter <- factor(long$daughter) # Remove redundant daughters
 long$time  <- factor(rep(1:3, each=8))
 long$yield <- long$yield + rnorm(24, sd = 100) + rep(c(-200,0,200), each=8)
 # Made multiresponse (no added structure, only noise)
@@ -177,6 +178,6 @@ summary(mod.rm.asca)
 
 ## -----------------------------------------------------------------------------
 # REML mixed model LiMM-PCA
-mod.rm.limmpca <- limmpca(yield ~ r(daughter) + feed*r(time), data = long, pca.in=2)
+mod.rm.limmpca <- limmpca(yield ~ r(daughter) + feed*r(time), data = long, pca.in=10)
 summary(mod.rm.limmpca)
 

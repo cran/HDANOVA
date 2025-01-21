@@ -20,7 +20,11 @@
 #' (of F test), "residual" (force error term), nueric value (alpha-value in LiMM-PCA).
 #' @param use_ED Use "effective dimensions" for score rescaling in LiMM-PCA.
 #' @param pca.in Compress response before ASCA (number of components).
-#' @param coding Effect coding: "sum" (default = sum-coding), "weighted", "reference", "treatment".
+#' @param contrasts Effect coding: "sum" (default = sum-coding), "weighted", "reference", "treatment".
+#' @param coding Defunct. Use 'contrasts' instead.
+#' @param equal_baseline Experimental: Set to \code{TRUE} to let interactions, where a main effect is missing,
+#' e.g., a nested model, be handled with the same baseline as a cross effect model. If \code{TRUE} the corresponding
+#' interactions will be put in quotation marks and included in the \code{model.frame}.
 #' @param SStype Type of sum-of-squares: "I" = sequential, "II" (default) = last term, obeying marginality,
 #' "III" = last term, not obeying marginality.
 #' @param REML Parameter to mixlm: NULL (default) = sum-of-squares, TRUE = REML, FALSE = ML.
@@ -33,6 +37,7 @@
 #' @importFrom grDevices adjustcolor palette
 #' @importFrom graphics abline axis box hist legend lines points
 #' @importFrom stats anova coefficients contr.sum contr.treatment contrasts<- formula getCall model.frame model.matrix model.response qf rnorm sigma terms update
+#' @importFrom pracma Rank
 #' @export
 asca_fit <- function(formula, data, subset, weights, na.action, family,
                      permute=FALSE,
@@ -42,23 +47,35 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
                      aug_error = "denominator", # "residual" => Mixed, alpha-value => LiMM-PCA
                      use_ED = FALSE,
                      pca.in = FALSE, # n>1 => LiMM-PCA and PC-ANOVA
-                     coding = c("sum","weighted","reference","treatment"),
+                     contrasts = "contr.sum",
+                     coding, #c("sum","weighted","reference","treatment"),
+                     equal_baseline = FALSE,
                      SStype = "II",
                      REML = NULL){
 
   # Simplify SStype
   if(is.character(SStype))
     SStype <- nchar(SStype)
+  if(!missing(coding))
+    stop("Input 'coding' has been exchanged with 'contrasts'. See ?asca_fit.")
 
   ## Get the data matrices
-  Yorig <- Y <- data[[formula[[2]]]]
+  #Yorig <- Y <- data[[formula[[2]]]]
+  Y <- data[[formula[[2]]]]
+  if(inherits(Y, "AsIs"))
+    Y <- unclass(Y)
+  Yorig <- Y <- as.matrix(Y)
   N <- nrow(Y)
   p <- ncol(Y)
+  if(is.null(p))
+    stop("Response must be a matrix.")
   #  if(center && (!missing(family) && family!="binomial"))
   #    Y <- Y - rep(colMeans(Y), each=N) # Centre Y by default, but not if family is binomial
+
+  ########################## PCA of response matrix ##########################
   if(pca.in != 0){ # Pre-decomposition, e.g., LiMM-PCA, PC-ANOVA
-    if(is.numeric(pca.in) && pca.in == 1)
-      stop('pca.in = 1 is not supported (single response)')
+#    if(is.numeric(pca.in) && pca.in == 1)
+#      stop('pca.in = 1 is not supported (single response)')
     # Automatic determination of dimension
     if(is.logical(pca.in) && pca.in)
       pca.in <- which.min(.PCAcv(Y))
@@ -66,6 +83,11 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
     if(pca.in < 1){
       pca <- .pca(Y)
       pca.in <- min(which(cumsum(pca$explvar/100) >= pca.in))
+    }
+    # Limit number of extracted components
+    if(pca.in > p){
+      warning(paste0("Reducing 'pca.in' from ", pca.in, " to the number of variables (",p,")"))
+      pca.in <- p
     }
     # PCA scores
     pca <- .pca(Y, ncomp = pca.in)
@@ -75,10 +97,12 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
   residuals <- Y
 
   mf <- match.call(expand.dots = FALSE)
-  m  <- match(c("formula", "data", "weights", "subset", "na.action", "family", "unrestricted", "REML"), names(mf), 0)
+  m  <- match(c("formula", "data", "weights", "subset", "na.action", "family",
+                "unrestricted", "REML", "contrasts", "equal_baseline"), names(mf), 0)
   mf <- mf[c(1, m)]                # Retain only the named arguments
   lme4 <- FALSE
 
+  ########################## Decide model type ##########################
   # Check for random effects using lmer notation (lme4) |
   if( any(grepl("|",formula,fixed=TRUE))){
     mixed <- TRUE
@@ -126,6 +150,7 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
     }
   }
 
+  ########################## Combined effects ##########################
   # Check for combined factors and remove symbols from formula.
   combined <- FALSE
   if(grepl("comb(", as.character(formula)[3], fixed=TRUE)){
@@ -142,6 +167,7 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
     formula <- cparse(formula)
   }
 
+  ########################## Dry-run to find properties ##########################
   # Pre-run of model to extract useful information and names
   mfPre <- mf
   mfPre[[1]] <- as.name(fit.func)
@@ -181,8 +207,10 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
     }
   }
 
-  # Exclude numeric effects and their interactions
+  # Exclude numeric effects and their interactions unless fit.func is lm
   nums <- names(unlist(lapply(modFra, class)))[which(unlist(lapply(modFra, class)) %in% c("numeric","integer"))]
+  if(fit.func == "lm")
+    nums <- numeric(0)
   if(length(nums)>0){
     exclude  <- match(nums, rownames(attr(terms(modFra), "factors")))
     approved <- which(colSums(attr(terms(modFra), "factors")[exclude,,drop=FALSE])==0)
@@ -196,33 +224,50 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
   approvedAB <- approved
   names(approvedAB) <- effsAB[approvedAB]
 
+  ########################## Effect coding ##########################
   # Apply coding to all included factors
-  if(length(coding)>1)
-    coding <- coding[1]
-  if(!coding %in% c("sum","weighted","reference","treatment"))
-    stop("Invalid coding")
-  for(i in 1:length(approvedMain)){
-    a <- which(effs==names(approvedMain[i]))
-    dat_a <- dat[[effs[a]]]
-    if(!missing(subset))
-      dat_a <- subset(dat_a, subset)
-    if(coding == "sum")
-      contrasts(dat[[effs[a]]]) <- contr.sum(levels(dat_a))
-    if(coding == "weighted"){
-      contrasts(dat[[effs[a]]]) <- contr.weighted(dat_a)
-    }
-    if(coding == "reference" || coding == "treatment")
-      contrasts(dat[[effs[a]]]) <- contr.treatment(levels(dat_a))
-  }
-  if(fit.func == "lm" && !is.logical(REML)){
-    if(coding == "sum")
-      mf$contrasts <- mfPre$contrasts <- "contr.sum"
-    if(coding == "treatment" || coding == "reference")
-      mf$contrasts <- mfPre$contrasts <- "contr.treatment"
-    if(coding == "weighted")
-      mf$contrasts <- mfPre$contrasts <- "contr.weighted"
-  }
+  #if(length(coding)>1)
+  #  coding <- coding[1]
+  #if(!coding %in% c("sum","weighted","reference","treatment"))
+  #  stop("Invalid coding")
+  # ms <- missing(subset)
+  # contrast.list <- lapply(dat, function(dat_a){
+  #   if(inherits(dat_a, "factor")){
+  #     if(!ms)
+  #       dat_a <- subset(dat_a, subset)
+  #     if(coding == "sum")
+  #       return(contr.sum(levels(dat_a)))
+  #     if(coding == "weighted")
+  #       return(contr.weighted(dat_a))
+  #     if(coding == "reference" || coding == "treatment")
+  #       return(contr.treatment(levels(dat_a)))
+  #   }
+  # })
+  # contrast.list <- contrast.list[!sapply(contrast.list, is.null)]
 
+  # for(i in 1:length(approvedMain)){
+  #   a <- which(effs==names(approvedMain[i]))
+  #   dat_a <- dat[[effs[a]]]
+  #   if(!missing(subset))
+  #     dat_a <- subset(dat_a, subset)
+  #   if(coding == "sum" && is.factor(dat_a))
+  #     contrasts(dat[[effs[a]]]) <- contr.sum(levels(dat_a))
+  #   if(coding == "weighted" && is.factor(dat_a)){
+  #     contrasts(dat[[effs[a]]]) <- contr.weighted(dat_a)
+  #   }
+  #   if((coding == "reference" || coding == "treatment")  && is.factor(dat_a))
+  #     contrasts(dat[[effs[a]]]) <- contr.treatment(levels(dat_a))
+  # }
+  # if(fit.func == "lm" && !is.logical(REML)){
+  #   if(coding == "sum")
+  #     mf$contrasts <- mfPre$contrasts <- "contr.sum"
+  #   if(coding == "treatment" || coding == "reference")
+  #     mf$contrasts <- mfPre$contrasts <- "contr.treatment"
+  #   if(coding == "weighted")
+  #     mf$contrasts <- mfPre$contrasts <- "contr.weighted"
+  # }
+
+  ########################## ANOVA ##########################
   # Main ANOVA loop over all responses
   mf[[1]] <- as.name(fit.func)
   mfPre[[3]] <- as.name("dat")
@@ -315,17 +360,22 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
     }
   }
 
+  ########################## LS estimates ##########################
   # Effect loop
   LS <- effects <- list()
   for(i in 1:length(approved)){
     a <- approved[i]
-    LS[[effs[a]]] <- M[, assign==a, drop=FALSE] %*% coefs[assign==a,, drop=FALSE]
+    # Exclude non-estimable levels:
+    estimable <- !is.na(rowSums(coefs[assign==a,, drop=FALSE]))
+    LS[[effs[a]]] <- M[, assign==a, drop=FALSE][,estimable,drop=FALSE] %*% coefs[assign==a,, drop=FALSE][estimable,,drop=FALSE]
     colnames(LS[[effs[a]]]) <- colnames(Y)
     effects[[effs[a]]] <- modFra[[effs[a]]]
   }
 
   # Residuals
-  residuals <- Y - M%*%coefs
+  # Exclude non-estimable levels:
+  estimable <- !is.na(rowSums(coefs))
+  residuals <- Y - M[,estimable,drop=FALSE] %*% coefs[estimable,,drop=FALSE]
 
   # If model is of lme4 type, the sums-of-squares are not directly available
   if(length(ssq) == 0){
@@ -339,6 +389,7 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
     names(ssq)[length(ssq)] <- "Residuals"
   }
 
+  ########################## Augmented LS/errors ##########################
   # Augment error term to LS for permutation testing, LiMM-PCA and similar
   error <- LS_aug <- LS
   if(aug_error == "residuals" || !mixed){ # Fixed effect models and forced "residuals"
@@ -519,6 +570,7 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
     }
   }
 
+  ########################## Combined effects ##########################
   # Combine effects if the comb() function is used
   eff_combined <- rep(FALSE, length(effs))
   names(eff_combined) <- effs
@@ -573,6 +625,7 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
   names(ssq)[length(ssq)] <- "Residuals"
   eff_combined <- eff_combined[approved]
 
+  ########################## Permutation ##########################
   # Permutation testing
   if(!(is.logical(permute) && !permute)){
     # Default to 1000 permutations
@@ -623,37 +676,25 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
     }
   }
 
+  ########################## SCA ##########################
   # SCAs
   scores <- loadings <- projected <- singulars <- list()
   for(i in approved){
-    maxDiri <- maxDir[i]
+    maxDiri <- min(Rank(LS[[effs[i]]]),maxDir[i])
     if(pca.in != 0)
       maxDiri <- min(maxDiri, pca.in)
-    # NEW
+    if(add_error)
+      maxDiri <- min(N-1, p)
+    if(maxDiri == 0)
+      stop(paste0("Effect '", effs[i], "' has no estimable levels"))
     pcai <- .pca(LS[[effs[i]]], ncomp=maxDiri, proj=error[[effs[i]]])
     scores[[effs[i]]] <- pcai$scores
     loadings[[effs[i]]] <- pcai$loadings
     projected[[effs[i]]] <- pcai$projected
     singulars[[effs[i]]] <- pcai$singulars
-    # OLD
-    # udv <- svd(LS[[effs[i]]])
-    # expli <- (udv$d^2/sum(udv$d^2)*100)[1:maxDiri]
-    # scores[[effs[i]]]    <- (udv$u * rep(udv$d, each=N))[,1:maxDiri, drop=FALSE]
-    # dimnames(scores[[effs[i]]]) <- list(rownames(LS[[effs[i]]]), paste("Comp", 1:maxDiri, sep=" "))
-    # loadings[[effs[i]]]  <- udv$v[,1:maxDiri, drop=FALSE]
-    # dimnames(loadings[[effs[i]]]) <- list(colnames(LS[[effs[i]]]), paste("Comp", 1:maxDiri, sep=" "))
-    # # Projections of residuals or corresponding error term
-    # projected[[effs[i]]] <- error[[effs[i]]] %*% loadings[[effs[i]]]
-    # # projected[[effs[i]]] <- residuals %*% loadings[[effs[i]]]
-    #
-    # dimnames(projected[[effs[i]]]) <- list(rownames(LS[[effs[i]]]), paste("Comp", 1:maxDiri, sep=" "))
-    # singulars[[effs[i]]] <- udv$d[1:maxDiri]
-    # names(singulars[[effs[i]]]) <- paste("Comp", 1:maxDiri, sep=" ")
-    # attr(scores[[effs[i]]], 'explvar') <- attr(loadings[[effs[i]]], 'explvar') <- attr(projected[[effs[i]]], 'explvar') <- expli
 
     if(pca.in!=0){ # Transform back if PCA on Y has been performed
       loadings[[effs[i]]] <- pca$loadings[,1:pca.in,drop=FALSE] %*% loadings[[effs[i]]]
-      #loadings[[effs[i]]] <- Yudv$v[,1:pca.in,drop=FALSE] %*% loadings[[effs[i]]]
       dimnames(loadings[[effs[i]]]) <- list(colnames(Yorig), paste("Comp", 1:maxDiri, sep=" "))
     }
   }
@@ -667,11 +708,17 @@ asca_fit <- function(formula, data, subset, weights, na.action, family,
   projected[["Residuals"]] <- pcaRes$projected
   singulars[["Residuals"]] <- pcaRes$singulars
 
+  # Create model.frame object
+  model <- model.frame(mod)
+  model[[1]] <- Yorig
+
+  ########################## Return ##########################
   obj <- list(scores=scores, loadings=loadings, projected=projected, singulars=singulars,
               LS=LS, effects=effects, coefficients=coefs, Y=Yorig, X=M, residuals=residuals,
-              error=error, eff_combined=eff_combined, SStype=SStype, coding=coding, unrestricted=unrestricted,
+              error=error, eff_combined=eff_combined, SStype=SStype, contrasts=contrasts, unrestricted=unrestricted,
               ssq=ssq, ssqY=ssqY, explvar=ssq/ssqY, models=models, anovas=anovas, model.frame=modFra,
-              call=match.call(), fit.type=fit.type, add_error=add_error, dfNum=dfNum, dfDenom=dfDenom)
+              call=match.call(), fit.type=fit.type, add_error=add_error, dfNum=dfNum, dfDenom=dfDenom,
+              model = model)
   if(pca.in!=0){
     obj$Ypca <- list(pca=pca, ncomp=pca.in)
   }

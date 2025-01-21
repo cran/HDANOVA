@@ -4,6 +4,7 @@
 #'
 #' @param formula Model formula accepting a single response (block) and predictors. See Details for more information.
 #' @param data The data set to analyse.
+#' @param contrasts Effect coding: "sum" (default = sum-coding), "weighted", "reference", "treatment".
 # #' @param subset Expression for subsetting the data before modelling.
 # #' @param weights Optional object weights.
 # #' @param na.action How to handle NAs (no action implemented).
@@ -64,6 +65,10 @@
 #' mod.mix <- asca(assessment ~ candy + r(assessor), data=candies)
 #' scoreplot(mod.mix)
 #'
+#' # Mixed Model ASCA, REML estimation
+#' mod.mix <- asca(assessment ~ candy + r(assessor), data=candies, REML=TRUE)
+#' scoreplot(mod.mix)
+#'
 #' # Load Caldana data
 #' data(caldana)
 #'
@@ -77,7 +82,7 @@
 #' summary(mod.perm)
 #'
 #' @export
-asca <- function(formula, data, ...){
+asca <- function(formula, data, contrasts = "contr.sum", ...){
   # formula, data, subset, weights, na.action, family, permute=FALSE,
   # unrestricted = FALSE,
   # add_error = FALSE, # TRUE => APCA/LiMM-PCA
@@ -86,7 +91,7 @@ asca <- function(formula, data, ...){
   # coding = c("sum","weighted","reference","treatment"),
   # SStype = "II",
   # REML = NULL
-  object <- asca_fit(formula=formula, data=data, ...)
+  object <- asca_fit(formula=formula, data=data, contrasts = contrasts, ...)
   object$call <- match.call()
   object
 }
