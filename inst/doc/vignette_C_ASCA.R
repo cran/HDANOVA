@@ -22,8 +22,18 @@ library(HDANOVA)
 data(candies)
 
 # Fit ASCA model
+mod <- hdanova(assessment ~ candy*assessor, data=candies)
+summary(mod)
+
+## -----------------------------------------------------------------------------
+# Fit ASCA model
 mod <- asca(assessment ~ candy*assessor, data=candies)
 summary(mod)
+
+## -----------------------------------------------------------------------------
+# Fit ASCA model step by step
+mod_hd <- hdanova(assessment ~ candy*assessor, data=candies)
+mod_asca <- sca(mod_hd)
 
 ## -----------------------------------------------------------------------------
 # Permutation testing (default = 1000 permutations, if not specified)
@@ -32,6 +42,10 @@ summary(mod)
 
 ## -----------------------------------------------------------------------------
 permutationplot(mod, factor = "assessor")
+
+## -----------------------------------------------------------------------------
+mod <- asca(assessment ~ candy*assessor, data=candies)
+mod <- permutation(mod)
 
 ## -----------------------------------------------------------------------------
 # Fit ASCA model with random assessor
@@ -56,11 +70,21 @@ scoreplot(mod, factor="assessor", main="Assessor scores", projections=FALSE)
 scoreplot(mod, factor="assessor", main="Assessor scores", spider=TRUE)
 par(par.old)
 
+## ----fig.width=4.5, fig.height=7----------------------------------------------
+mod <- signflip(mod, factor="candy", comp=1)
+par.old <- par(mfrow=c(2,1), mar=c(4,4,2,1))
+loadingplot(mod, scatter=TRUE, labels="names", main="Candy loadings")
+scoreplot(mod, main="Candy scores")
+par(par.old)
+
 ## -----------------------------------------------------------------------------
 L <- loadings(mod, factor="candy")
 head(L)
 S <- scores(mod, factor="candy")
 head(S)
+
+## -----------------------------------------------------------------------------
+biplot(mod, factor="candy", labels="names")
 
 ## ----fig.width=4.5, fig.height=7----------------------------------------------
 par.old <- par(mfrow=c(2,1), mar=c(4,4,2,1))
