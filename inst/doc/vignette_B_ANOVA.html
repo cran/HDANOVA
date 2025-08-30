@@ -825,54 +825,33 @@ as follows:</p>
 underlying regression model, here revealing the regressions are
 performed separately for each response.</p>
 <div class="sourceCode" id="cb23"><pre class="sourceCode r"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" tabindex="-1"></a><span class="fu">summary</span>(mod)</span>
-<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a><span class="co">#&gt; Response yield :</span></span>
-<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a><span class="co">#&gt; Call:</span></span>
-<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a><span class="co">#&gt; lm(formula = yield ~ feed * breed, data = dat)</span></span>
-<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a><span class="co">#&gt; Residuals:</span></span>
-<span id="cb23-8"><a href="#cb23-8" tabindex="-1"></a><span class="co">#&gt;     Min      1Q  Median      3Q     Max </span></span>
-<span id="cb23-9"><a href="#cb23-9" tabindex="-1"></a><span class="co">#&gt; -2123.5  -506.2  -109.0   625.8  1762.0 </span></span>
-<span id="cb23-10"><a href="#cb23-10" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-11"><a href="#cb23-11" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
-<span id="cb23-12"><a href="#cb23-12" tabindex="-1"></a><span class="co">#&gt;                            Estimate Std. Error t value Pr(&gt;|t|)    </span></span>
-<span id="cb23-13"><a href="#cb23-13" tabindex="-1"></a><span class="co">#&gt; (Intercept)                 7254.28     129.27  56.118   &lt;2e-16 ***</span></span>
-<span id="cb23-14"><a href="#cb23-14" tabindex="-1"></a><span class="co">#&gt; feed(high)                  -191.27     129.27  -1.480    0.146    </span></span>
-<span id="cb23-15"><a href="#cb23-15" tabindex="-1"></a><span class="co">#&gt; breed(Angus)                  40.78     182.81   0.223    0.825    </span></span>
-<span id="cb23-16"><a href="#cb23-16" tabindex="-1"></a><span class="co">#&gt; breed(Hereford)              -72.52     182.81  -0.397    0.694    </span></span>
-<span id="cb23-17"><a href="#cb23-17" tabindex="-1"></a><span class="co">#&gt; feed(high):breed(Angus)      116.25     182.81   0.636    0.528    </span></span>
-<span id="cb23-18"><a href="#cb23-18" tabindex="-1"></a><span class="co">#&gt; feed(high):breed(Hereford)    71.26     182.81   0.390    0.699    </span></span>
-<span id="cb23-19"><a href="#cb23-19" tabindex="-1"></a><span class="co">#&gt; ---</span></span>
-<span id="cb23-20"><a href="#cb23-20" tabindex="-1"></a><span class="co">#&gt; Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</span></span>
-<span id="cb23-21"><a href="#cb23-21" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-22"><a href="#cb23-22" tabindex="-1"></a><span class="co">#&gt; Residual standard error: 895.6 on 42 degrees of freedom</span></span>
-<span id="cb23-23"><a href="#cb23-23" tabindex="-1"></a><span class="co">#&gt; Multiple R-squared:  0.07529,    Adjusted R-squared:  -0.03479 </span></span>
-<span id="cb23-24"><a href="#cb23-24" tabindex="-1"></a><span class="co">#&gt; F-statistic: 0.6839 on 5 and 42 DF,  p-value: 0.6382</span></span>
-<span id="cb23-25"><a href="#cb23-25" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-26"><a href="#cb23-26" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-27"><a href="#cb23-27" tabindex="-1"></a><span class="co">#&gt; Response mastitis :</span></span>
-<span id="cb23-28"><a href="#cb23-28" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-29"><a href="#cb23-29" tabindex="-1"></a><span class="co">#&gt; Call:</span></span>
-<span id="cb23-30"><a href="#cb23-30" tabindex="-1"></a><span class="co">#&gt; lm(formula = mastitis ~ feed * breed, data = dat)</span></span>
-<span id="cb23-31"><a href="#cb23-31" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-32"><a href="#cb23-32" tabindex="-1"></a><span class="co">#&gt; Residuals:</span></span>
-<span id="cb23-33"><a href="#cb23-33" tabindex="-1"></a><span class="co">#&gt;      Min       1Q   Median       3Q      Max </span></span>
-<span id="cb23-34"><a href="#cb23-34" tabindex="-1"></a><span class="co">#&gt; -2.25984 -0.60241  0.07629  0.60307  1.82843 </span></span>
-<span id="cb23-35"><a href="#cb23-35" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-36"><a href="#cb23-36" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
-<span id="cb23-37"><a href="#cb23-37" tabindex="-1"></a><span class="co">#&gt;                            Estimate Std. Error t value Pr(&gt;|t|)    </span></span>
-<span id="cb23-38"><a href="#cb23-38" tabindex="-1"></a><span class="co">#&gt; (Intercept)                  3.5537     0.1316  26.994  &lt; 2e-16 ***</span></span>
-<span id="cb23-39"><a href="#cb23-39" tabindex="-1"></a><span class="co">#&gt; feed(high)                  -0.3506     0.1316  -2.663   0.0109 *  </span></span>
-<span id="cb23-40"><a href="#cb23-40" tabindex="-1"></a><span class="co">#&gt; breed(Angus)                -0.8802     0.1862  -4.728 2.56e-05 ***</span></span>
-<span id="cb23-41"><a href="#cb23-41" tabindex="-1"></a><span class="co">#&gt; breed(Hereford)             -0.1653     0.1862  -0.888   0.3795    </span></span>
-<span id="cb23-42"><a href="#cb23-42" tabindex="-1"></a><span class="co">#&gt; feed(high):breed(Angus)     -0.3722     0.1862  -1.999   0.0521 .  </span></span>
-<span id="cb23-43"><a href="#cb23-43" tabindex="-1"></a><span class="co">#&gt; feed(high):breed(Hereford)   0.3991     0.1862   2.144   0.0379 *  </span></span>
-<span id="cb23-44"><a href="#cb23-44" tabindex="-1"></a><span class="co">#&gt; ---</span></span>
-<span id="cb23-45"><a href="#cb23-45" tabindex="-1"></a><span class="co">#&gt; Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</span></span>
-<span id="cb23-46"><a href="#cb23-46" tabindex="-1"></a><span class="co">#&gt; </span></span>
-<span id="cb23-47"><a href="#cb23-47" tabindex="-1"></a><span class="co">#&gt; Residual standard error: 0.9121 on 42 degrees of freedom</span></span>
-<span id="cb23-48"><a href="#cb23-48" tabindex="-1"></a><span class="co">#&gt; Multiple R-squared:  0.5399, Adjusted R-squared:  0.4852 </span></span>
-<span id="cb23-49"><a href="#cb23-49" tabindex="-1"></a><span class="co">#&gt; F-statistic: 9.858 on 5 and 42 DF,  p-value: 2.755e-06</span></span></code></pre></div>
+<span id="cb23-2"><a href="#cb23-2" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb23-3"><a href="#cb23-3" tabindex="-1"></a><span class="co">#&gt; Call:</span></span>
+<span id="cb23-4"><a href="#cb23-4" tabindex="-1"></a><span class="co">#&gt; lm(formula = cbind(yield, mastitis) ~ feed * breed, data = dat)</span></span>
+<span id="cb23-5"><a href="#cb23-5" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb23-6"><a href="#cb23-6" tabindex="-1"></a><span class="co">#&gt; Residuals:</span></span>
+<span id="cb23-7"><a href="#cb23-7" tabindex="-1"></a><span class="co">#&gt;          yield mastitis</span></span>
+<span id="cb23-8"><a href="#cb23-8" tabindex="-1"></a><span class="co">#&gt; Min    -2123.5 -2.25984</span></span>
+<span id="cb23-9"><a href="#cb23-9" tabindex="-1"></a><span class="co">#&gt; 1Q      -506.2 -0.60241</span></span>
+<span id="cb23-10"><a href="#cb23-10" tabindex="-1"></a><span class="co">#&gt; Median  -109.0  0.07629</span></span>
+<span id="cb23-11"><a href="#cb23-11" tabindex="-1"></a><span class="co">#&gt; 3Q       625.8  0.60307</span></span>
+<span id="cb23-12"><a href="#cb23-12" tabindex="-1"></a><span class="co">#&gt; Max     1762.0  1.82843</span></span>
+<span id="cb23-13"><a href="#cb23-13" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb23-14"><a href="#cb23-14" tabindex="-1"></a><span class="co">#&gt; Coefficients:</span></span>
+<span id="cb23-15"><a href="#cb23-15" tabindex="-1"></a><span class="co">#&gt;      Estimate Std. Error t value Pr(&gt;|t|)    </span></span>
+<span id="cb23-16"><a href="#cb23-16" tabindex="-1"></a><span class="co">#&gt; [1,]  7254.28     129.27  56.118   &lt;2e-16 ***</span></span>
+<span id="cb23-17"><a href="#cb23-17" tabindex="-1"></a><span class="co">#&gt; [2,]  -191.27     129.27  -1.480    0.146    </span></span>
+<span id="cb23-18"><a href="#cb23-18" tabindex="-1"></a><span class="co">#&gt; [3,]    40.78     182.81   0.223    0.825    </span></span>
+<span id="cb23-19"><a href="#cb23-19" tabindex="-1"></a><span class="co">#&gt; [4,]   -72.52     182.81  -0.397    0.694    </span></span>
+<span id="cb23-20"><a href="#cb23-20" tabindex="-1"></a><span class="co">#&gt; [5,]   116.25     182.81   0.636    0.528    </span></span>
+<span id="cb23-21"><a href="#cb23-21" tabindex="-1"></a><span class="co">#&gt; [6,]    71.26     182.81   0.390    0.699    </span></span>
+<span id="cb23-22"><a href="#cb23-22" tabindex="-1"></a><span class="co">#&gt; ---</span></span>
+<span id="cb23-23"><a href="#cb23-23" tabindex="-1"></a><span class="co">#&gt; Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1</span></span>
+<span id="cb23-24"><a href="#cb23-24" tabindex="-1"></a><span class="co">#&gt; </span></span>
+<span id="cb23-25"><a href="#cb23-25" tabindex="-1"></a><span class="co">#&gt; s: 895.6 on 42 degrees of freedom</span></span>
+<span id="cb23-26"><a href="#cb23-26" tabindex="-1"></a><span class="co">#&gt; Multiple R-squared: 0.974,</span></span>
+<span id="cb23-27"><a href="#cb23-27" tabindex="-1"></a><span class="co">#&gt; Adjusted R-squared: 0.971 </span></span>
+<span id="cb23-28"><a href="#cb23-28" tabindex="-1"></a><span class="co">#&gt; F-statistic: 315.3 on 5 and 42 DF,  p-value: &lt; 2.2e-16</span></span></code></pre></div>
 </div>
 </div>
 

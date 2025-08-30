@@ -278,10 +278,22 @@ scoreplot.asca <- function(object, factor = 1, comps = 1:2, within_level = "all"
       box()
       for(i in 1:nlev){
         lev <- levels(object$effects[[factor]])[i]
-        if(!object$add_error) # Skip plotting of scores if error is added (APCA/LiMM-PCA)
-          points(scors[object$effects[[factor]] == lev, comps], rep(i,sum(as.numeric(object$effects[[factor]]) == i)), pch=pch.scores, col=gr.col[i])
-        if(!(factor==0)) # Skip projections if global PCA is used
-          points(projs[object$effects[[factor]] == lev, comps], rep(i,sum(as.numeric(object$effects[[factor]]) == i)), pch=pch.projections, col=gr.col[i])
+        if(!object$add_error){ # Skip plotting of scores if error is added (APCA/LiMM-PCA)
+          pch.sc <- pch.scores
+          if(length(pch.scores) == nlev)
+            pch.sc <- pch.scores[i]
+          if(length(pch.scores) == nobj)
+            pch.sc <- pch.scores[object$effects[[factor]] == lev]
+          points(scors[object$effects[[factor]] == lev, comps], rep(i,sum(as.numeric(object$effects[[factor]]) == i)), pch=pch.sc, col=gr.col[i])
+        }
+        if(!(factor==0)){ # Skip projections if global PCA is used
+          pch.pr <- pch.projections
+          if(length(pch.projections) == nlev)
+            pch.pr <- pch.projections[i]
+          if(length(pch.projections) == nobj)
+            pch.pr <- pch.projections[object$effects[[factor]] == lev]
+          points(projs[object$effects[[factor]] == lev, comps], rep(i,sum(as.numeric(object$effects[[factor]]) == i)), pch=pch.pr, col=gr.col[i])
+        }
       }
       if(!missing(ellipsoids)){
         if(missing(confidence))
@@ -325,7 +337,7 @@ permutationplot <- function(object, factor = 1, xlim, xlab = "SSQ", main, ...){
       main <- paste0("Permutation of ", factor, " effect")
   }
   hist(object$permute$ssqaperm[[factor]], xlim=xlim, xlab=xlab, main=main, ...)
-  abline(v = object$ssq[factor], col=2, lwd=2, ...)
+  abline(v = object$permute$ssqa[factor], col=2, lwd=2, ...)
 }
 
 #' @title Timeplot for Combined Effects
@@ -348,7 +360,7 @@ permutationplot <- function(object, factor = 1, xlim, xlab = "SSQ", main, ...){
 #'
 #' @examples
 #' data("caldana")
-#' mod.comb <- asca(compounds ~ time + comb(light + light:time), data=caldana)
+#' mod.comb <- asca(compounds ~ time + comb(light + time:light), data=caldana)
 #'
 #' # Default time axis
 #' timeplot(mod.comb, factor="light", time="time", comb=2)

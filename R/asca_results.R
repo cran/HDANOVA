@@ -43,6 +43,8 @@ print.hdanova <- function(x, ...){
     mod <- "LiMM-PCA"
   if(inherits(x, "msca"))
     mod <- "Multilevel Simultaneous Component Analysis"
+  if(inherits(x, "apls"))
+    mod <- "Anova Partial Least Squares"
   cat(paste0(mod, " fitted using"), x$fit.type)
   cat("\nCall:\n", deparse(x$call), "\n", sep = "")
   invisible(x)
@@ -72,13 +74,28 @@ summary.hdanova <- function(object, extended=TRUE, df=FALSE, ...){
     mod <- "Multilevel Simultaneous Component Analysis"
     rownames(dat) <- c("Between", "Within")
   }
+  if(inherits(object, "apls"))
+    mod <- "Anova Partial Least Squares"
   x <- list(dat=dat, model=mod, fit.type=object$fit.type)
   if(extended){
     LS_REML <- "least squares"
     if(!inherits(object$models[[1]],"lm"))
       LS_REML <- ifelse(getME(object$models[[1]],"is_REML"), "REML", "ML")
     ss <- c("I","II","III")
-    x$info <- paste0("SS type ", ss[object$SStype], ", ", object$coding, " coding, ",
+    if(length(object$contrasts)>1)
+      contrasts <- "mixed"
+    else {
+      contrasts <- ""
+      if(object$contrasts[[1]] == "contr.treatment")
+        contrasts <- "treatment"
+      if(object$contrasts[[1]] == "contr.sum")
+        contrasts <- "sum"
+      if(object$contrasts[[1]] == "contr.weighted")
+        contrasts <- "weighted"
+      if(object$contrasts[[1]] == "contr.reference")
+        contrasts <- "reference"
+    }
+    x$info <- paste0("SS type ", ss[object$SStype], ", ", contrasts, " coding, ",
                      ifelse(object$unrestricted, "unrestricted","restricted"), " model",
                      ", ", LS_REML, " estimation")
     if(!is.null(object$permute))

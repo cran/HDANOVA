@@ -103,7 +103,7 @@ par(par.old)
 data(caldana)
 
 # Combined effects
-mod.comb <- asca(compounds ~ time + comb(light + light:time), data=caldana)
+mod.comb <- asca(compounds ~ time + comb(light + time:light), data=caldana)
 summary(mod.comb)
 
 ## -----------------------------------------------------------------------------

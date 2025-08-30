@@ -1,3 +1,5 @@
+#' @name hdanova
+#' @aliases hdanova
 #' @title High-Dimensional Analysis of Variance
 #'
 #' @description This function provides a high-dimensional analysis of variance (HDANOVA) method
@@ -17,7 +19,7 @@
 #' (of F test), "residual" (force error term), nueric value (alpha-value in LiMM-PCA).
 #' @param use_ED Use "effective dimensions" for score rescaling in LiMM-PCA.
 #' @param pca.in Compress response before ASCA (number of components).
-#' @param contrasts Effect coding: "sum" (default = sum-coding), "weighted", "reference", "treatment".
+#' @param contrasts Effect coding: "contr.sum" (default = sum-coding), "contr.weighted" (not for lme4 models), "contr.reference", "contr.treatment".
 #' @param coding Defunct. Use 'contrasts' instead.
 #' @param equal_baseline Experimental: Set to \code{TRUE} to let interactions, where a main effect is missing,
 #' e.g., a nested model, be handled with the same baseline as a cross effect model. If \code{TRUE} the corresponding
@@ -25,6 +27,13 @@
 #' @param SStype Type of sum-of-squares: "I" = sequential, "II" (default) = last term, obeying marginality,
 #' "III" = last term, not obeying marginality.
 #' @param REML Parameter to mixlm: NULL (default) = sum-of-squares, TRUE = REML, FALSE = ML.
+#' @param scale Scaling of the response matrix. Defaults to \code{FALSE} (no scaling). For alternatives, see Details.
+#'
+#' @details Scaling of the response matrix can be done by setting the \code{scale} parameter. If \code{scale=TRUE},
+#' each column is scaled by its standard deviation (autoscaling). A numeric value can be provided to scale
+#' the columns by specific quantities. If \code{scale} is a character string, the first element
+#' is interpreted as a factor name and the second element is interpreted as a factor level, whose samples
+#' the standard deviations are calculated from (reference group scaling).
 #'
 #' @return An \code{hdanova} object containing loadings, scores, explained variances, etc. The object has
 #' associated plotting (\code{\link{asca_plots}}) and result (\code{\link{asca_results}}) functions.
@@ -41,20 +50,22 @@
 #' @importFrom progress progress_bar
 #' @importFrom grDevices adjustcolor palette
 #' @importFrom graphics abline axis box hist legend lines points
-#' @importFrom stats anova coefficients contr.sum contr.treatment contrasts<- formula getCall model.frame model.matrix model.response qf rnorm sigma terms update
+#' @importFrom stats anova coefficients contr.sum contr.treatment contrasts<- fitted formula getCall logLik model.frame model.matrix model.response qf reformulate rnorm setNames sigma terms update var
 #' @importFrom pracma Rank
+#' @importFrom MASS ginv
 #' @export
 hdanova <- function(formula, data, subset, weights, na.action, family,
-                     unrestricted = FALSE,
-                     add_error = FALSE, # TRUE => APCA
-                     aug_error = "denominator", # "residual" => Mixed, alpha-value => LiMM-PCA
-                     use_ED = FALSE,
-                     pca.in = FALSE, # n>1 => LiMM-PCA and PC-ANOVA
-                     contrasts = "contr.sum",
-                     coding, #c("sum","weighted","reference","treatment"),
-                     equal_baseline = FALSE,
-                     SStype = "II",
-                     REML = NULL){
+                    unrestricted = FALSE,
+                    add_error = FALSE, # TRUE => APCA
+                    aug_error = "denominator", # "residual" => Mixed, alpha-value => LiMM-PCA
+                    use_ED = FALSE,
+                    pca.in = FALSE, # n>1 => LiMM-PCA and PC-ANOVA
+                    contrasts = "contr.sum",
+                    coding, #c("sum","weighted","reference","treatment"),
+                    equal_baseline = FALSE,
+                    SStype = "II",
+                    REML = NULL,
+                    scale = FALSE){
 
   # Simplify SStype
   if(is.character(SStype))
@@ -75,10 +86,29 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
   #  if(center && (!missing(family) && family!="binomial"))
   #    Y <- Y - rep(colMeans(Y), each=N) # Centre Y by default, but not if family is binomial
 
+  ########################### Scale response matrix ##########################
+  if(is.logical(scale) && scale){
+    # Autoscaling
+    Y <- scale(Y, center = TRUE, scale = TRUE)
+  } else if(is.numeric(scale)){
+    # Scale by numeric value
+    if(length(scale) != p)
+      stop("Numeric 'scale' must have the same length as the number of variables in Y")
+    Y <- scale(Y, center = FALSE, scale = scale)
+  } else if(is.character(scale)){
+    # Scale by factor and level
+    if(length(scale) != 2)
+      stop("Character 'scale' must have two elements: factor name and level")
+    if(!scale[1] %in% names(data))
+      stop(paste0("Factor '", scale[1], "' not found in data"))
+    if(!scale[2] %in% levels(data[[scale[1]]]))
+      stop(paste0("Level '", scale[2], "' not found in factor '", scale[1], "'"))
+    sd <- apply(Y[data[[scale[1]]] == scale[2],,drop=FALSE],2,sd)
+    Y <- scale(Y, center = FALSE, scale = sd)
+  }
+
   ########################## PCA of response matrix ##########################
   if(pca.in != 0){ # Pre-decomposition, e.g., LiMM-PCA, PC-ANOVA
-#    if(is.numeric(pca.in) && pca.in == 1)
-#      stop('pca.in = 1 is not supported (single response)')
     # Automatic determination of dimension
     if(is.logical(pca.in) && pca.in)
       pca.in <- which.min(.PCAcv(Y))
@@ -163,7 +193,8 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
     j <- 1
     for(i in 1:length(tl)){
       if(grepl("comb(", tl[i], fixed=TRUE)){
-        combined[[j]] <- attr(terms(cparse(formula(paste0(".~", tl[i])))), "term.labels")
+#        combined[[j]] <- attr(terms(cparse(formula(paste0(".~", tl[i])))), "term.labels")
+        combined[[j]] <- attr(cparse(formula(paste0(".~", tl[i]))), "terms")[[1]]
         j <- j+1
       }
     }
@@ -204,11 +235,11 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
 
   # Alphabetically sorted interactions
   effsAB <- effs
-  for(i in 1:length(effs)){
-    if(grepl(":", effs[i], fixed=TRUE)){
-      effsAB[i] <- paste(sort(strsplit(effs[i],":")[[1]]), collapse=":")
-    }
-  }
+  # for(i in 1:length(effs)){
+  #   if(grepl(":", effs[i], fixed=TRUE)){
+  #     effsAB[i] <- paste(sort(strsplit(effs[i],":")[[1]]), collapse=":")
+  #   }
+  # }
 
   # Exclude numeric effects and their interactions unless fit.func is lm
   nums <- names(unlist(lapply(modFra, class)))[which(unlist(lapply(modFra, class)) %in% c("numeric","integer"))]
@@ -227,49 +258,6 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
   approvedAB <- approved
   names(approvedAB) <- effsAB[approvedAB]
 
-  ########################## Effect coding ##########################
-  # Apply coding to all included factors
-  #if(length(coding)>1)
-  #  coding <- coding[1]
-  #if(!coding %in% c("sum","weighted","reference","treatment"))
-  #  stop("Invalid coding")
-  # ms <- missing(subset)
-  # contrast.list <- lapply(dat, function(dat_a){
-  #   if(inherits(dat_a, "factor")){
-  #     if(!ms)
-  #       dat_a <- subset(dat_a, subset)
-  #     if(coding == "sum")
-  #       return(contr.sum(levels(dat_a)))
-  #     if(coding == "weighted")
-  #       return(contr.weighted(dat_a))
-  #     if(coding == "reference" || coding == "treatment")
-  #       return(contr.treatment(levels(dat_a)))
-  #   }
-  # })
-  # contrast.list <- contrast.list[!sapply(contrast.list, is.null)]
-
-  # for(i in 1:length(approvedMain)){
-  #   a <- which(effs==names(approvedMain[i]))
-  #   dat_a <- dat[[effs[a]]]
-  #   if(!missing(subset))
-  #     dat_a <- subset(dat_a, subset)
-  #   if(coding == "sum" && is.factor(dat_a))
-  #     contrasts(dat[[effs[a]]]) <- contr.sum(levels(dat_a))
-  #   if(coding == "weighted" && is.factor(dat_a)){
-  #     contrasts(dat[[effs[a]]]) <- contr.weighted(dat_a)
-  #   }
-  #   if((coding == "reference" || coding == "treatment")  && is.factor(dat_a))
-  #     contrasts(dat[[effs[a]]]) <- contr.treatment(levels(dat_a))
-  # }
-  # if(fit.func == "lm" && !is.logical(REML)){
-  #   if(coding == "sum")
-  #     mf$contrasts <- mfPre$contrasts <- "contr.sum"
-  #   if(coding == "treatment" || coding == "reference")
-  #     mf$contrasts <- mfPre$contrasts <- "contr.treatment"
-  #   if(coding == "weighted")
-  #     mf$contrasts <- mfPre$contrasts <- "contr.weighted"
-  # }
-
   ########################## ANOVA ##########################
   # Main ANOVA loop over all responses
   mf[[1]] <- as.name(fit.func)
@@ -287,7 +275,11 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
   for(i in 1:ncol(Y)){
     if(mixed){
       dat[[formula[[2]]]] <- Y[,i,drop=FALSE]
-      modi <- eval(mfPre, envir = environment())
+      if(is.logical(REML)){
+        suppressMessages(suppressWarnings(modi <- eval(mfPre, envir = environment())))
+      } else {
+        modi <- eval(mfPre, envir = environment())
+      }
       if(lme4 || is.logical(REML)){
         u <- unlist(lme4::ranef(modi))
         if(i == 1)
@@ -308,22 +300,28 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
       coefs[,i] <- coefficients(modi)
     }
 
-    if(SStype == 1)
-      ano <- anova(modi)
+    if(SStype == 1){
+        ano <- anova(modi)
+    }
     if(SStype == 2){
-      if(missing(family))
-        ano <- Anova(modi, type="II", singular.ok=TRUE)
-      else
+      if(missing(family)){
+          ano <- Anova(modi, type="II", singular.ok=TRUE)
+      } else
         ano <- Anova(modi, type="II", test.statistic = "F", singular.ok=TRUE)
     }
     if(SStype == 3){
-      if(missing(family))
-        ano <- Anova(modi, type="III", singular.ok=TRUE)
-      else
+      if(missing(family)){
+          ano <- Anova(modi, type="III", singular.ok=TRUE)
+      } else
         ano <- Anova(modi, type="III", test.statistic = "F", singular.ok=TRUE)
     }
-    if(mixed)
-      ssq <- ssq + ano$anova[sel,"Sum Sq"]
+    if(mixed){
+      if(is.logical(REML)){
+        vp <- .ML_variance_partition_single(modi, SStype)
+        ssq <- ssq + vp$Variance * N
+      } else
+        ssq <- ssq + ano$anova[sel,"Sum Sq"]
+    }
     else
       ssq <- ssq + ano[sel,"Sum Sq"]
     models[[i]] <- modi
@@ -353,18 +351,18 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
     }
   }
 
-  # Sort interaction names alphabetically
-  for(i in 1:length(colnames(modFra))){
-    if(grepl(":", colnames(modFra)[i], fixed=TRUE)){
-      colnames(modFra)[i] <- paste(sort(strsplit(colnames(modFra)[i],":")[[1]]), collapse=":")
-    }
-  }
-  # Sort interaction names alphabetically
-  for(i in 1:length(effs)){
-    if(grepl(":", effs[i], fixed=TRUE)){
-      effs[i] <- paste(sort(strsplit(effs[i],":")[[1]]), collapse=":")
-    }
-  }
+  # # Sort interaction names alphabetically
+  # for(i in 1:length(colnames(modFra))){
+  #   if(grepl(":", colnames(modFra)[i], fixed=TRUE)){
+  #     colnames(modFra)[i] <- paste(sort(strsplit(colnames(modFra)[i],":")[[1]]), collapse=":")
+  #   }
+  # }
+  # # Sort interaction names alphabetically
+  # for(i in 1:length(effs)){
+  #   if(grepl(":", effs[i], fixed=TRUE)){
+  #     effs[i] <- paste(sort(strsplit(effs[i],":")[[1]]), collapse=":")
+  #   }
+  # }
 
   ########################## LS estimates ##########################
   # Effect loop
@@ -407,12 +405,12 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
       error[[effs[a]]] <- LS[[effs[a]]] + residuals
     }
     anonam <- rownames(ano)
-    # Alphabetically sorted interaction names
-    for(i in 1:length(anonam)){
-      if(grepl(":", anonam[i], fixed=TRUE)){
-        anonam[i] <- paste(sort(strsplit(anonam[i],":")[[1]]), collapse=":")
-      }
-    }
+    # # Alphabetically sorted interaction names
+    # for(i in 1:length(anonam)){
+    #   if(grepl(":", anonam[i], fixed=TRUE)){
+    #     anonam[i] <- paste(sort(strsplit(anonam[i],":")[[1]]), collapse=":")
+    #   }
+    # }
     dfNum   <- ano[["Df"]]
     dfDenom <- c(rep(ano["Residuals","Df"], length(dfNum)-1),0)
     names(dfNum) <- names(dfDenom) <- anonam # May need to limit to approved?
@@ -421,12 +419,12 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
     if(!lme4 && !is.logical(REML)){
       ets <- ano$err.terms
       anonam <- rownames(ano$anova)
-      # Alphabetically sorted interaction names
-      for(i in 1:length(anonam)){
-        if(grepl(":", anonam[i], fixed=TRUE)){
-          anonam[i] <- paste(sort(strsplit(anonam[i],":")[[1]]), collapse=":")
-        }
-      }
+      # # Alphabetically sorted interaction names
+      # for(i in 1:length(anonam)){
+      #   if(grepl(":", anonam[i], fixed=TRUE)){
+      #     anonam[i] <- paste(sort(strsplit(anonam[i],":")[[1]]), collapse=":")
+      #   }
+      # }
       names(ets) <- anonam
       dfDenom <- ano$denom.df
       dfNum   <- ano$anova[["Df"]]
@@ -444,12 +442,12 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
       formula <- formulaOld
       ets <- ano_no_lme4$err.terms
       no_eff <- rownames(ano_no_lme4$anova)
-      # Alphabetically sorted interaction names
-      for(i in 1:length(no_eff)){
-        if(grepl(":", no_eff[i], fixed=TRUE)){
-          no_eff[i] <- paste(sort(strsplit(no_eff[i],":")[[1]]), collapse=":")
-        }
-      }
+      # # Alphabetically sorted interaction names
+      # for(i in 1:length(no_eff)){
+      #   if(grepl(":", no_eff[i], fixed=TRUE)){
+      #     no_eff[i] <- paste(sort(strsplit(no_eff[i],":")[[1]]), collapse=":")
+      #   }
+      # }
       names(ets) <- no_eff
       dfDenom <- ano_no_lme4$denom.df
       dfNum <- ano_no_lme4$anova[["Df"]]
@@ -512,12 +510,12 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
         EDm <- matrix(unlist(ED), nrow = length(randEffList))
         EDm <- pmax(EDm, 1)
         sortedRandEffList <- names(randEffList)
-        # Alphabetically sorted interaction names
-        for(i in 1:length(sortedRandEffList)){
-          if(grepl(":", sortedRandEffList[i], fixed=TRUE)){
-            sortedRandEffList[i] <- paste(sort(strsplit(sortedRandEffList[i],":")[[1]]), collapse=":")
-          }
-        }
+        # # Alphabetically sorted interaction names
+        # for(i in 1:length(sortedRandEffList)){
+        #   if(grepl(":", sortedRandEffList[i], fixed=TRUE)){
+        #     sortedRandEffList[i] <- paste(sort(strsplit(sortedRandEffList[i],":")[[1]]), collapse=":")
+        #   }
+        # }
         rownames(EDm) <- sortedRandEffList
         EDall <- matrix(dfNum, nrow = length(dfNum), ncol = ncol(EDm))
         rownames(EDall) <- names(dfNum)
@@ -600,8 +598,8 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
       names(ssq)[approved[length(approved)]] <- combName
       maxDir[approved[length(approved)]] <- 0
       for(dis in combined[[i]]){
-        if(grepl(":", dis, fixed=TRUE)) # Reorder interactions to alphabetical order
-          dis <- paste(sort(strsplit(dis,":")[[1]]), collapse=":")
+        # if(grepl(":", dis, fixed=TRUE)) # Reorder interactions to alphabetical order
+        #   dis <- paste(sort(strsplit(dis,":")[[1]]), collapse=":")
         if(any(!(dis %in% names(approvedAB))))
           stop("Cannot combine a continuous effect with a categorical factor.")
         remove <- c(remove, which(effsAB==dis))
@@ -619,6 +617,7 @@ hdanova <- function(formula, data, subset, weights, na.action, family,
       #      error[[approved[length(approved)]]] <- error[[approved[length(approved)]]] + error[[effs[approvedAB[names(approvedAB)==dis]]]]
       LS_aug[[approved[length(approved)]]] <- error[[approved[length(approved)]]]
       names(LS_aug)[approved[length(approved)]] <- combName
+      names(approvedComb)[approved[length(approved)]] <- combName
     }
   } else {
     names(approvedComb) <- names(approvedAB)
@@ -676,7 +675,8 @@ formula_comb <- function(formula, data, REML = NULL){
   formula <- formula(formula)
   terms <- terms(formula)
   effsr <- attr(terms,"term.labels")
-  effs  <- attr(terms(cparse(formula)),"term.labels")
+#  effs  <- attr(terms(cparse(formula)),"term.labels")
+  effs  <- attr(cparse(formula),"terms")[[1]]
   if(length(effs)==0){
     return( list(0) )
   }
@@ -747,6 +747,7 @@ cparse <- function (f, REML = NULL) {
   n <- length(right)
   result      <- character(n)
   result.REML <- character(n)
+  terms       <- list()
 
   # Main recursive loop extracting effects without comb()
   for(i in 1:n){
@@ -764,6 +765,7 @@ cparse <- function (f, REML = NULL) {
       return(x)
     }
     result[[i]] <- as.character(parsecall(formula(paste("~",paste(right[i],sep="+")))[2]))
+    terms[[i]]  <- trimws(strsplit(result[[i]], "\\+")[[1]])
   }
   f[3] <- formula(paste("~", paste(result, sep="", collapse="+")))[2]
 
@@ -787,9 +789,11 @@ cparse <- function (f, REML = NULL) {
       }
       ran <- parsecall(formula(paste("~",paste(right[i],sep="+")))[2])
       result.REML[i] <- ifelse(ran,as.character(formula(paste("~(1 | ",result[[i]],")",sep=""))[2]), result[[i]])
+      terms[[i]]  <- trimws(strsplit(result.REML[[i]], "\\+")[[1]])
     }
     f[3] <- formula(paste("~", paste(result.REML, sep="", collapse="+")))[2]
   }
+  attr(f, "terms") <- terms
   f
 }
 
