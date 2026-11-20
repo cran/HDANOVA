@@ -3,9 +3,16 @@
 S3method(biplot,asca)
 S3method(loadingplot,asca)
 S3method(loadings,asca)
+S3method(logLik,hdanova)
 S3method(model.frame,asca)
 S3method(model.matrix,asca)
 S3method(pls,default)
+S3method(predict,apca)
+S3method(predict,apls)
+S3method(predict,asca)
+S3method(predict,hdanova)
+S3method(predict,limmpca)
+S3method(predict,msca)
 S3method(print,hdanova)
 S3method(print,pcanova)
 S3method(print,summary.hdanova)
@@ -57,65 +64,77 @@ export(validationplot)
 importFrom(MASS,ginv)
 importFrom(RSpectra,svds)
 importFrom(Rcpp,evalCpp)
-importFrom(car,Anova)
-importFrom(car,dataEllipse)
-importFrom(car,ellipse)
-importFrom(grDevices,adjustcolor)
-importFrom(grDevices,dev.flush)
-importFrom(grDevices,dev.hold)
-importFrom(grDevices,palette)
-importFrom(graphics,abline)
-importFrom(graphics,axis)
-importFrom(graphics,box)
-importFrom(graphics,hist)
-importFrom(graphics,legend)
-importFrom(graphics,lines)
-importFrom(graphics,par)
-importFrom(graphics,points)
-importFrom(graphics,text)
-importFrom(lme4,VarCorr)
-importFrom(lme4,fixef)
-importFrom(lme4,getME)
-importFrom(lme4,glmer)
-importFrom(lme4,lmer)
-importFrom(lme4,ranef)
+importFrom(car,
+  Anova,
+  dataEllipse,
+  ellipse
+)
+importFrom(grDevices,
+  adjustcolor,
+  dev.flush,
+  dev.hold,
+  palette
+)
+importFrom(graphics,
+  abline,
+  axis,
+  box,
+  hist,
+  legend,
+  lines,
+  par,
+  points,
+  text
+)
+importFrom(lme4,
+  VarCorr,
+  fixef,
+  getME,
+  glmer,
+  lmer,
+  ranef
+)
 importFrom(mixlm,lm)
-importFrom(pls,MSEP)
-importFrom(pls,R2)
-importFrom(pls,RMSEP)
-importFrom(pls,coefplot)
-importFrom(pls,cvsegments)
-importFrom(pls,loading.weights)
-importFrom(pls,loadingplot)
-importFrom(pls,loadings)
-importFrom(pls,mvrValstats)
-importFrom(pls,pcr)
-importFrom(pls,plsr)
-importFrom(pls,predplot)
-importFrom(pls,scoreplot)
-importFrom(pls,scores)
-importFrom(pls,validationplot)
+importFrom(pls,
+  MSEP,
+  R2,
+  RMSEP,
+  coefplot,
+  cvsegments,
+  loading.weights,
+  loadingplot,
+  loadings,
+  mvrValstats,
+  pcr,
+  plsr,
+  predplot,
+  scoreplot,
+  scores,
+  validationplot
+)
 importFrom(pracma,Rank)
 importFrom(progress,progress_bar)
 importFrom(reformulas,findbars)
-importFrom(stats,"contrasts<-")
-importFrom(stats,anova)
-importFrom(stats,coefficients)
-importFrom(stats,contr.sum)
-importFrom(stats,contr.treatment)
-importFrom(stats,fitted)
-importFrom(stats,formula)
-importFrom(stats,getCall)
-importFrom(stats,logLik)
-importFrom(stats,model.frame)
-importFrom(stats,model.matrix)
-importFrom(stats,model.response)
-importFrom(stats,qf)
-importFrom(stats,reformulate)
-importFrom(stats,rnorm)
-importFrom(stats,setNames)
-importFrom(stats,sigma)
-importFrom(stats,terms)
-importFrom(stats,update)
-importFrom(stats,var)
+importFrom(stats,
+  "contrasts<-",
+  anova,
+  coefficients,
+  contr.sum,
+  contr.treatment,
+  fitted,
+  formula,
+  getCall,
+  logLik,
+  model.frame,
+  model.matrix,
+  model.response,
+  qf,
+  reformulate,
+  rnorm,
+  setNames,
+  sigma,
+  terms,
+  update,
+  var
+)
 useDynLib(HDANOVA, .registration = TRUE)

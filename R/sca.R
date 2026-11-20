@@ -5,6 +5,10 @@
 #' @param object A \code{hdanova} object.
 #'
 #' @returns An updated \code{hdanova} object with SCA results.
+#' @seealso Model constructors and wrappers: \code{\link{hdanova}},
+#' \code{\link{asca}}, \code{\link{apca}}, \code{\link{limmpca}} and
+#' \code{\link{msca}}.
+#' Plotting and summaries: \code{\link{asca_plots}} and \code{\link{asca_results}}.
 #' @examples
 #' # Load candies data
 #' data(candies)
@@ -20,9 +24,11 @@ sca <- function(object){
   # SCAs
   scores <- loadings <- projected <- singulars <- list()
   for(i in object$more$approved){
-    maxDiri <- min(Rank(object$LS[[object$more$effs[i]]]),object$more$maxDir[i])
+    maxDiri <- min(pracma::Rank(object$LS[[object$more$effs[i]]]),object$more$maxDir[i])
     if(object$more$pca.in != 0)
       maxDiri <- min(maxDiri, object$more$pca.in)
+    if(!is.null(object$more$pls.in) && object$more$pls.in != 0)
+      maxDiri <- min(maxDiri, object$more$pls.in)
     if(object$add_error)
       maxDiri <- min(object$more$N-1, object$more$p)
     if(maxDiri == 0)
@@ -42,6 +48,8 @@ sca <- function(object){
   maxDirRes <- min(object$more$N-1,object$more$p)
   if(object$more$pca.in != 0)
     maxDirRes <- min(maxDirRes, object$more$pca.in)
+  if(!is.null(object$more$pls.in) && object$more$pls.in != 0)
+    maxDirRes <- min(maxDirRes, object$more$pls.in)
   pcaRes <- .pca(object$residuals, ncomp=maxDirRes)
   scores[["Residuals"]] <- pcaRes$scores
   loadings[["Residuals"]] <- pcaRes$loadings

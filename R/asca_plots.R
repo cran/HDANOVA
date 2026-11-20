@@ -39,6 +39,10 @@
 #' Workhorse function underpinning most methods: \code{\link{hdanova}}.
 #' Extraction of results and plotting: \code{\link{asca_results}}, \code{\link{asca_plots}}, \code{\link{pcanova_results}} and \code{\link{pcanova_plots}}
 #'
+#' @examples
+#' # For end-to-end examples using scoreplot()/loadingplot(), see
+#' # ?asca, ?apca, ?apls, ?limmpca and ?msca.
+#'
 #' @export
 loadingplot.asca <- function(object, factor = 1, comps = 1:2, ...){
   if(inherits(object,"pcanova")){
@@ -145,6 +149,24 @@ scoreplot.asca <- function(object, factor = 1, comps = 1:2, within_level = "all"
     if(!inherits(object,"pcanova") && projections){
       if(factor != "Residuals" && factor != length(object$scores))
         projs <- projections(object=object, factor=factor) #+ scors
+    }
+
+    # For SS-type-aligned fits, collapse only effect scores to level means
+    # without modifying stored LS matrices or subject-level projections.
+    if(isTRUE(object$more$respect_SStype) &&
+       !(factor == "Residuals" || factor == length(object$scores))){
+      grp <- object$effects[[factor]]
+      # Replace each row of the score matrix with the mean of its factor-level group.
+      if(!is.null(scors) && !is.null(grp) && is.factor(grp) && nrow(scors) == length(grp)){
+        grp_chr <- as.character(grp)
+        for(lev in unique(grp_chr)){
+          idx <- which(grp_chr == lev)
+          scors[idx, ] <- matrix(colMeans(scors[idx, , drop = FALSE]),
+                                 nrow = length(idx),
+                                 ncol = ncol(scors),
+                                 byrow = TRUE)
+        }
+      }
     }
   }
 

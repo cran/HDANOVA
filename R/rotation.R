@@ -17,6 +17,10 @@
 #' @returns An updated \code{hdanova} object with rotation-test results stored in
 #' \code{object$permute} for compatibility with existing summary and plotting tools.
 #'
+#' @seealso Base fitting: \code{\link{hdanova}}.
+#' Permutation alternative: \code{\link{permutation}}.
+#' Plot helper: \code{\link{rotationplot}}.
+#'
 #' @examples
 #' # Load candies data
 #' data(candies)
@@ -86,9 +90,39 @@ rotation <- function(object,
       if(block.type == "global"){
         groups <- list(seq_len(object$more$N))
       } else {
-        effect_vars <- .rotation_effect_variable_names(object, eff_name)
-        block_info <- .rotation_build_blocks(object, eff_name, effect_vars)
-        groups <- block_info$groups
+        # Collect component variable names for this effect so blocking strata exclude them
+        combo <- object$more$approvedComb[[eff_name]]
+        if(is.null(combo))
+          combo <- which(object$more$effs == eff_name)
+        if(length(combo) == 0)
+          combo <- which(object$more$effs %in% eff_name)
+        combo_names <- object$more$effs[combo]
+        effect_vars <- unique(unlist(lapply(combo_names, .rotation_parse_effect_terms)))
+
+        # Build exchangeable rotation blocks from model-frame factors disjoint from effect_vars
+        mf <- object$model.frame
+        if(ncol(mf) > 0)
+          mf <- mf[setdiff(names(mf), names(mf)[1])]
+        candidate <- intersect(names(mf), object$more$effs)
+        candidate <- setdiff(candidate, eff_name)
+        candidate <- candidate[!candidate %in% "(Intercept)"]
+        eligible <- vapply(candidate, function(name){
+          vars <- .rotation_parse_effect_terms(name)
+          length(intersect(vars, effect_vars)) == 0
+        }, FUN.VALUE = TRUE)
+        strata <- candidate[eligible]
+        if(length(strata) == 0){
+          keys <- rep("1", object$more$N)
+        } else {
+          data <- mf[strata]
+          data[] <- lapply(data, function(col){
+            col_chr <- as.character(col)
+            col_chr[is.na(col_chr)] <- "NA"
+            col_chr
+          })
+          keys <- do.call(paste, c(data, sep="\r"))
+        }
+        groups <- split(seq_len(object$more$N), keys)
       }
 
       sizes <- lengths(groups)
@@ -110,17 +144,23 @@ rotation <- function(object,
 
       vals <- NULL
       if(cpp_available && !cpp_failed){
-        cpp_res <- tryCatch(
-          list(values = .run_cpp_rotation_with_progress(
-            DD = DD,
-            DR = DR,
-            groups = active_groups,
-            n_rot = rotate,
-            format = paste0("  Rotating ", eff_name, " (", i, "/", length(approved), ") [:bar] :percent (:eta)")
-          ),
-               error = NULL),
-          error = function(e)
-            list(values = NULL, error = e)
+        cpp_res <- tryCatch({
+          # Run C++ rotation kernel in chunks with progress bar
+          cpp_vals <- numeric(rotate)
+          pb_cpp <- progress_bar$new(total = rotate,
+                                     format = paste0("  Rotating ", eff_name, " (", i, "/", length(approved), ") [:bar] :percent (:eta)"))
+          chunk_size <- min(250L, rotate)
+          from <- 1L
+          while(from <= rotate){
+            n_chunk <- min(chunk_size, rotate - from + 1L)
+            to <- from + n_chunk - 1L
+            cpp_vals[from:to] <- .rotation_ssq_kernel_cpp(DD, DR, active_groups, n_chunk)
+            pb_cpp$tick(n_chunk)
+            from <- to + 1L
+          }
+          list(values = cpp_vals, error = NULL)
+        }, error = function(e)
+          list(values = NULL, error = e)
         )
         vals <- cpp_res$values
         if(!is.null(cpp_res$error)){
@@ -135,7 +175,20 @@ rotation <- function(object,
         pb <- progress_bar$new(total = rotate,
                                format = paste0("  Rotating ", eff_name, " (", i, "/", length(approved), ") [:bar] :percent (:eta)"))
         for(rot in seq_len(rotate)){
-          DR_rot <- .rotate_within_blocks(DR, active_groups)
+          # Apply independent random orthogonal (Haar-distributed) rotations within each exchangeable block
+          DR_rot <- DR
+          for(block in active_groups){
+            m <- length(block)
+            if(m <= 1)
+              next
+            z <- matrix(stats::rnorm(m * m), nrow = m)
+            qr_z <- qr(z)
+            q <- qr.Q(qr_z)
+            d <- sign(diag(qr_z$qr))
+            d[d == 0] <- 1
+            Q <- sweep(q, 2, d, `*`)
+            DR_rot[block, ] <- Q %*% DR_rot[block, , drop=FALSE]
+          }
           vals[rot] <- norm(DD %*% DR_rot, "F")^2
           pb$tick()
         }
@@ -173,36 +226,6 @@ rotation <- function(object,
   object
 }
 
-.rotate_within_blocks <- function(mat, groups){
-  for(block in groups){
-    m <- length(block)
-    if(m <= 1)
-      next
-    Q <- .random_orthogonal_matrix(m)
-    mat[block, ] <- Q %*% mat[block, , drop=FALSE]
-  }
-  mat
-}
-
-.random_orthogonal_matrix <- function(n){
-  z <- matrix(stats::rnorm(n * n), nrow = n)
-  qr_z <- qr(z)
-  q <- qr.Q(qr_z)
-  d <- sign(diag(qr_z$qr))
-  d[d == 0] <- 1
-  sweep(q, 2, d, `*`)
-}
-
-.rotation_effect_variable_names <- function(object, eff_name){
-  combo <- object$more$approvedComb[[eff_name]]
-  if(is.null(combo))
-    combo <- which(object$more$effs == eff_name)
-  if(length(combo) == 0)
-    combo <- which(object$more$effs %in% eff_name)
-  names <- object$more$effs[combo]
-  unique(unlist(lapply(names, .rotation_parse_effect_terms)))
-}
-
 .rotation_parse_effect_terms <- function(name){
   if(is.null(name))
     return(character(0))
@@ -213,50 +236,8 @@ rotation <- function(object,
   terms[terms != ""]
 }
 
-.rotation_build_blocks <- function(object, eff_name, effect_vars){
-  mf <- object$model.frame
-  if(ncol(mf) > 0)
-    mf <- mf[setdiff(names(mf), names(mf)[1])]
-  candidate <- intersect(names(mf), object$more$effs)
-  candidate <- setdiff(candidate, eff_name)
-  candidate <- candidate[!candidate %in% "(Intercept)"]
-  eligible <- vapply(candidate, function(name){
-    vars <- .rotation_parse_effect_terms(name)
-    length(intersect(vars, effect_vars)) == 0
-  }, FUN.VALUE = TRUE)
-  strata <- candidate[eligible]
-  if(length(strata) == 0){
-    keys <- rep("1", object$more$N)
-  } else {
-    data <- mf[strata]
-    data[] <- lapply(data, function(col){
-      col_chr <- as.character(col)
-      col_chr[is.na(col_chr)] <- "NA"
-      col_chr
-    })
-    keys <- do.call(paste, c(data, sep="\r"))
-  }
-  groups <- split(seq_len(object$more$N), keys)
-  list(groups = groups)
-}
-
 .rotation_format_number <- function(x){
   if(!is.finite(x))
     return("a very large number")
   prettyNum(x, big.mark = ",", scientific = FALSE)
-}
-
-.run_cpp_rotation_with_progress <- function(DD, DR, groups, n_rot, format){
-  vals <- numeric(n_rot)
-  pb <- progress_bar$new(total = n_rot, format = format)
-  chunk_size <- min(250L, n_rot)
-  from <- 1L
-  while(from <= n_rot){
-    n_chunk <- min(chunk_size, n_rot - from + 1L)
-    to <- from + n_chunk - 1L
-    vals[from:to] <- .rotation_ssq_kernel_cpp(DD, DR, groups, n_chunk)
-    pb$tick(n_chunk)
-    from <- to + 1L
-  }
-  vals
 }

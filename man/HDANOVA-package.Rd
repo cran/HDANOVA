@@ -26,5 +26,10 @@ Extraction of results and plotting: \code{\link{asca_results}}, \code{\link{asca
 \author{
 \strong{Maintainer}: Kristian Hovde Liland \email{kristian.liland@nmbu.no} (\href{https://orcid.org/0000-0001-6468-9423}{ORCID})
 
+Authors:
+\itemize{
+  \item Kristian Hovde Liland \email{kristian.liland@nmbu.no} (\href{https://orcid.org/0000-0001-6468-9423}{ORCID})
+}
+
 }
 \keyword{internal}
